@@ -351,10 +351,6 @@ final class StoreKitManager: ObservableObject {
             logger.error("\(line, privacy: .public)")
         }
 
-        #if DEBUG
-        print("💳 \(line)")
-        #endif
-
         billingDebugEvents.append(line)
         if billingDebugEvents.count > 200 {
             billingDebugEvents.removeFirst(billingDebugEvents.count - 200)
