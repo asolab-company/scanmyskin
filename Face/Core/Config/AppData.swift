@@ -34,6 +34,7 @@ enum AppData {
         static let latestReportData = "report.latestData"
         static let reportHistoryData = "report.historyData"
         static let hasPendingInitialReport = "report.hasPendingInitialReport"
+        static let didAcceptFaceAnalysisConsent = "report.didAcceptFaceAnalysisConsent"
         static let isPremium = "subscription.isPremium"
         static let aiCoachMessagesData = "coach.messagesData"
         static let scannedProductsData = "products.scannedData"
