@@ -31,6 +31,7 @@ private enum CoachConnectionState {
 }
 
 struct AICoachView: View {
+    private let bottomScrollAnchorID = "ai-coach-bottom-anchor"
     @State private var text = ""
     @State private var keyboardHeight: CGFloat = 0
     @State private var messages: [AICoachMessage] = []
@@ -39,6 +40,7 @@ struct AICoachView: View {
     @State private var isPhotoPickerPresented = false
     @State private var isSending = false
     @State private var hasLoaded = false
+    @State private var keyboardOpenEventID = 0
     @State private var connectionState: CoachConnectionState = .connecting
 
     private let service = OpenAICoachService()
@@ -64,19 +66,45 @@ struct AICoachView: View {
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 18)
-                    .padding(.bottom, 188)
+                    .padding(.bottom, chatListBottomPadding)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(spacing: 16) {
-                            ForEach(messages) { message in
-                                chatRow(message)
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVStack(spacing: 16) {
+                                ForEach(messages) { message in
+                                    chatRow(message)
+                                }
+
+                                if isSending {
+                                    typingIndicatorRow
+                                }
+
+                                Color.clear
+                                    .frame(height: 1)
+                                    .id(bottomScrollAnchorID)
                             }
+                            .padding(.top, 16)
                         }
-                        .padding(.top, 16)
+                        .scrollDismissesKeyboard(.interactively)
+                        .padding(.horizontal, 18)
+                        .padding(.bottom, chatListBottomPadding)
+                        .onAppear {
+                            scrollToBottom(with: proxy, animated: false)
+                        }
+                        .onChange(of: messages.count) { _, _ in
+                            scrollToBottom(with: proxy)
+                        }
+                        .onChange(of: isSending) { _, _ in
+                            scrollToBottom(with: proxy)
+                        }
+                        .onChange(of: keyboardHeight) { _, _ in
+                            scrollToBottom(with: proxy)
+                        }
+                        .onChange(of: keyboardOpenEventID) { _, _ in
+                            scrollToBottom(with: proxy)
+                        }
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 188 + tabBarInset)
                 }
             }
 
@@ -191,6 +219,14 @@ struct AICoachView: View {
         }
     }
 
+    private var typingIndicatorRow: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            coachAvatar
+            typingBubble
+            Spacer(minLength: 18)
+        }
+    }
+
     private func bubble(_ message: AICoachMessage) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if let imageData = message.imageData, let image = UIImage(data: imageData) {
@@ -202,10 +238,17 @@ struct AICoachView: View {
             }
 
             if !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text(message.text)
-                    .font(.system(size: 14))
-                    .foregroundStyle(message.direction == .incoming ? AppTheme.textPrimary : .white)
-                    .multilineTextAlignment(.leading)
+                if let markdownText = parsedMarkdown(from: message.text) {
+                    Text(markdownText)
+                        .font(.system(size: 14))
+                        .foregroundStyle(message.direction == .incoming ? AppTheme.textPrimary : .white)
+                        .multilineTextAlignment(.leading)
+                } else {
+                    Text(message.text)
+                        .font(.system(size: 14))
+                        .foregroundStyle(message.direction == .incoming ? AppTheme.textPrimary : .white)
+                        .multilineTextAlignment(.leading)
+                }
             }
         }
         .padding(.horizontal, 14)
@@ -219,6 +262,28 @@ struct AICoachView: View {
                         .stroke(message.direction == .incoming ? Color.white.opacity(0.9) : Color.clear, lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(message.direction == .incoming ? 0.08 : 0), radius: 1)
+        )
+    }
+
+    private var typingBubble: some View {
+        HStack(spacing: 10) {
+            TypingDotsView()
+
+            Text("AI is thinking...")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: 220, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(0.5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.white.opacity(0.9), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.08), radius: 1)
         )
     }
 
@@ -237,17 +302,13 @@ struct AICoachView: View {
     }
 
     private var bottomComposer: some View {
-        let isKeyboardVisible = keyboardHeight > 0
-        let lift = max(tabBarInset - 20, keyboardHeight - 25)
-        let hasAttachment = attachedImageData != nil
-        let backgroundHeight: CGFloat = hasAttachment ? 108 : 60
-        let backgroundBottomFill: CGFloat = isKeyboardVisible ? 0 : lift
+        let backgroundBottomFill: CGFloat = isKeyboardVisible ? 0 : composerLift
 
         return ZStack(alignment: .bottom) {
             Color.init(hex: "#f0f0f0")
-                .frame(height: backgroundHeight + backgroundBottomFill)
+                .frame(height: composerBackgroundHeight + backgroundBottomFill)
                 .ignoresSafeArea(edges: isKeyboardVisible ? [] : .bottom)
-                .offset(y: isKeyboardVisible ? 0 : lift)
+                .offset(y: isKeyboardVisible ? 0 : composerLift)
                 .shadow(color: .black.opacity(0.1), radius: 4, y: -4)
 
             VStack(spacing: hasAttachment ? 8 : 0) {
@@ -329,16 +390,68 @@ struct AICoachView: View {
             }
             .padding(.bottom, 10)
         }
-        .padding(.bottom, lift)
-        .animation(.easeOut(duration: 0.25), value: lift)
+        .padding(.bottom, composerLift)
+        .animation(.easeOut(duration: 0.25), value: composerLift)
         .animation(.easeOut(duration: 0.2), value: isKeyboardVisible)
         .animation(.easeOut(duration: 0.2), value: hasAttachment)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .frame(maxWidth: .infinity)
     }
 
     private var canSend: Bool {
         guard !isSending else { return false }
         return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachedImageData != nil
+    }
+
+    private var isKeyboardVisible: Bool {
+        keyboardHeight > 0.5
+    }
+
+    private var composerLift: CGFloat {
+        max(tabBarInset - 20, keyboardHeight - 25)
+    }
+
+    private var hasAttachment: Bool {
+        attachedImageData != nil
+    }
+
+    private var composerBackgroundHeight: CGFloat {
+        hasAttachment ? 108 : 60
+    }
+
+    private var composerVisualHeight: CGFloat {
+        composerBackgroundHeight + 10
+    }
+
+    private var chatListBottomPadding: CGFloat {
+        composerVisualHeight + composerLift + 12
+    }
+
+    private func parsedMarkdown(from text: String) -> AttributedString? {
+        do {
+            return try AttributedString(
+                markdown: text,
+                options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+            )
+        } catch {
+            return nil
+        }
+    }
+
+    private func scrollToBottom(with proxy: ScrollViewProxy, animated: Bool = true) {
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(bottomScrollAnchorID, anchor: .bottom)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        proxy.scrollTo(bottomScrollAnchorID, anchor: .bottom)
+                    }
+                }
+            } else {
+                proxy.scrollTo(bottomScrollAnchorID, anchor: .bottom)
+            }
+        }
     }
 
     private func clearChatHistory() {
@@ -436,13 +549,46 @@ struct AICoachView: View {
             let frame = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
         else { return }
 
-        let overlap = max(0, UIScreen.main.bounds.height - frame.minY)
+        let wasVisible = keyboardHeight > 0.5
+        let rawOverlap = UIScreen.main.bounds.height - frame.minY
+        let overlap = rawOverlap < 1 ? 0 : max(0, rawOverlap)
         withAnimation(.easeOut(duration: 0.25)) {
             keyboardHeight = overlap
+        }
+        if !wasVisible && overlap > 0.5 {
+            keyboardOpenEventID += 1
         }
     }
 }
 
 #Preview {
     AICoachView(tabBarInset: 98)
+}
+
+private struct TypingDotsView: View {
+    @State private var isAnimating = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(AppTheme.accent)
+                    .frame(width: 7, height: 7)
+                    .scaleEffect(isAnimating ? 1 : 0.56)
+                    .opacity(isAnimating ? 1 : 0.35)
+                    .animation(
+                        .easeInOut(duration: 0.55)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(index) * 0.14),
+                        value: isAnimating
+                    )
+            }
+        }
+        .onAppear {
+            isAnimating = true
+        }
+        .onDisappear {
+            isAnimating = false
+        }
+    }
 }
