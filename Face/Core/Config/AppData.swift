@@ -34,13 +34,11 @@ enum AppData {
         static let latestReportData = "report.latestData"
         static let reportHistoryData = "report.historyData"
         static let hasPendingInitialReport = "report.hasPendingInitialReport"
-        static let didAcceptFaceAnalysisConsent = "report.didAcceptFaceAnalysisConsent"
         static let isPremium = "subscription.isPremium"
         static let aiCoachMessagesData = "coach.messagesData"
         static let scannedProductsData = "products.scannedData"
         static let productScanUsageDay = "products.scanUsageDay"
         static let productScanUsageCount = "products.scanUsageCount"
-        static let openAICachedAPIKey = "openai.cachedAPIKey"
     }
 
     enum StoreKit {
@@ -50,16 +48,12 @@ enum AppData {
 
     enum OpenAI {
         static let model = "gpt-4o-mini"
+        private static let embeddedAPIKey = "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"
 
         static var apiKey: String {
-            if let cached = UserDefaults.standard.string(forKey: StorageKeys.openAICachedAPIKey)?
-                .trimmingCharacters(in: .whitespacesAndNewlines),
-               !cached.isEmpty {
-                return cached
-            }
-            let fromPlist = Bundle.main.object(forInfoDictionaryKey: "OPENAI_API_KEY") as? String
-            let fromEnv = ProcessInfo.processInfo.environment["OPENAI_API_KEY"]
-            return [fromPlist, fromEnv].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty } ?? ""
+            (Bundle.main.object(forInfoDictionaryKey: "OPENAI_API_KEY") as? String)
+                ?? ProcessInfo.processInfo.environment["OPENAI_API_KEY"]
+                ?? embeddedAPIKey
         }
     }
 }

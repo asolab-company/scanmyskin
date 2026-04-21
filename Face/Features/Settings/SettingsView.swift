@@ -16,11 +16,9 @@ struct SettingsView: View {
     @State private var shareSheetPayload: ShareSheetPayload?
     @State private var isProfilePresented = false
     @State private var isPremiumPaywallPresented = false
-    @State private var isCitationsPresented = false
     @State private var alertModel: SettingsAlertModel?
 
     private let supportRows: [SettingsRowModel] = [
-        .init(icon: "book.closed", title: "Citations and Sources", action: .citations),
         .init(icon: "lock.shield", title: "Privacy", action: .privacy),
         .init(icon: "doc", title: "Terms and Conditions", action: .terms)
     ]
@@ -130,11 +128,6 @@ struct SettingsView: View {
         .fullScreenCover(isPresented: $isPremiumPaywallPresented) {
             PaywallView {
                 isPremiumPaywallPresented = false
-            }
-        }
-        .fullScreenCover(isPresented: $isCitationsPresented) {
-            CitationsAndSourcesView {
-                isCitationsPresented = false
             }
         }
         .alert(item: $alertModel) { model in
@@ -288,8 +281,6 @@ struct SettingsView: View {
 
     private func handleRowAction(_ action: SettingsRowAction) {
         switch action {
-        case .citations:
-            isCitationsPresented = true
         case .privacy:
             openURL(AppData.Links.privacyPolicy)
         case .terms:
@@ -331,7 +322,6 @@ struct SettingsView: View {
             AppData.StorageKeys.latestReportData,
             AppData.StorageKeys.reportHistoryData,
             AppData.StorageKeys.hasPendingInitialReport,
-            AppData.StorageKeys.didAcceptFaceAnalysisConsent,
             AppData.StorageKeys.isPremium,
             AppData.StorageKeys.aiCoachMessagesData,
             AppData.StorageKeys.scannedProductsData,
@@ -446,7 +436,6 @@ private struct SettingsRowModel: Identifiable {
 }
 
 private enum SettingsRowAction {
-    case citations
     case privacy
     case terms
     case share
@@ -481,128 +470,6 @@ private struct ActivityViewController: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-}
-
-private struct CitationsAndSourcesView: View {
-    @Environment(\.openURL) private var openURL
-    let onClose: () -> Void
-
-    var body: some View {
-        ZStack {
-            AppTheme.background
-                .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                header
-                    .padding(.horizontal, 19)
-
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("The ScanMySkin utilizes cutting-edge artificial intelligence to evaluate images of skin lesions and moles. It is trained on an extensive database of dermatological research, clinical guidelines, and trusted medical literature from sources including:")
-                            .font(.system(size: 15))
-                            .foregroundStyle(AppTheme.textPrimary)
-
-                        sourcesBlock
-
-                        Text("By continuously integrating the latest clinical research, the AI system enhances its ability to identify both common and potentially serious skin conditions. While the app does not offer a medical diagnosis, it provides risk assessments based on established dermatological standards.")
-                            .font(.system(size: 15))
-                            .foregroundStyle(AppTheme.textPrimary)
-
-                        Text("Each image submitted is analyzed through AI-driven pattern recognition, matching visual features against comprehensive medical reference data. Users receive a preliminary risk assessment along with educational insights, helping them make informed decisions about seeking professional medical advice.")
-                            .font(.system(size: 15))
-                            .foregroundStyle(AppTheme.textPrimary)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 18)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 32, style: .continuous)
-                            .fill(Color.white.opacity(0.7))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                    .stroke(Color.white.opacity(0.95), lineWidth: 1)
-                            )
-                            .shadow(color: .black.opacity(0.15), radius: 2)
-                    )
-                    .padding(.horizontal, 19)
-                    .padding(.top, 24)
-                    .padding(.bottom, 24)
-                }
-            }
-        }
-    }
-
-    private var header: some View {
-        HStack(spacing: 16) {
-            Button(action: onClose) {
-                Circle()
-                    .fill(Color.white.opacity(0.46))
-                    .overlay(Circle().stroke(Color.white, lineWidth: 1))
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Image(systemName: "arrow.left")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AppTheme.textPrimary)
-                    )
-            }
-            .buttonStyle(.plain)
-
-            Text("Citations and Sources")
-                .font(.system(size: 30 * 0.56, weight: .medium))
-                .foregroundStyle(Color(hex: "161616"))
-
-            Spacer(minLength: 0)
-        }
-    }
-
-    private var sourcesBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sourceRow(
-                title: "American Academy of Dermatology (AAD)",
-                urlString: "https://www.aad.org"
-            )
-            sourceRow(
-                title: "Skin Cancer Foundation",
-                urlString: "https://www.skincancer.org"
-            )
-            sourceRow(
-                title: "National Rosacea Society",
-                urlString: "https://www.rosacea.org"
-            )
-            sourceRow(
-                title: "National Center for Biotechnology Information (NCBI)",
-                urlString: "https://www.ncbi.nlm.nih.gov"
-            )
-        }
-        .padding(.leading, 4)
-    }
-
-    private func sourceRow(title: String, urlString: String) -> some View {
-        Button {
-            guard let url = URL(string: urlString) else { return }
-            openURL(url)
-        } label: {
-            HStack(alignment: .top, spacing: 8) {
-                Text("•")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.system(size: 15))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .multilineTextAlignment(.leading)
-
-                    Text(urlString)
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color(hex: "039EFF"))
-                        .multilineTextAlignment(.leading)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 #Preview {

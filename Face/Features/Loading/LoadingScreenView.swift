@@ -15,11 +15,8 @@ struct LoadingScreenView: View {
     var body: some View {
         SplashBrandingView(appName: appName, showProgress: true, progress: driver.progress)
             .onAppear {
-                Task { @MainActor in
-                    await OpenAIKeyLoader.ensureKeyLoaded()
-                    driver.start {
-                        onFinished()
-                    }
+                driver.start {
+                    onFinished()
                 }
             }
             .onDisappear {

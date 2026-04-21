@@ -106,7 +106,20 @@ struct PaywallView: View {
         }
         .task {
             storeKit.clearPurchaseError()
+            billingUILog("paywall appeared. loading products...")
             await storeKit.loadProducts()
+            billingUILog(
+                "load finished. annualProductID=\(storeKit.annualProduct?.id ?? "nil"), price=\(storeKit.annualProduct?.displayPrice ?? "nil"), error=\(storeKit.purchaseErrorMessage ?? "nil")"
+            )
+        }
+        .onChange(of: storeKit.isLoadingProducts) { _, newValue in
+            billingUILog("isLoadingProducts changed -> \(newValue)")
+        }
+        .onChange(of: storeKit.annualProduct?.id) { _, newValue in
+            billingUILog("annualProduct changed -> \(newValue ?? "nil")")
+        }
+        .onChange(of: storeKit.purchaseErrorMessage) { _, newValue in
+            billingUILog("purchaseErrorMessage changed -> \(newValue ?? "nil")")
         }
         .alert("Purchase Error", isPresented: $isShowingErrorAlert) {
             Button("OK", role: .cancel) {}
@@ -205,6 +218,12 @@ struct PaywallView: View {
         .padding(.top, 10)
         .padding(.bottom, 8)
         .background(Color(hex: "DEDEDE"))
+    }
+
+    private func billingUILog(_ message: String) {
+        #if DEBUG
+        print("💳 [PaywallUI] \(message)")
+        #endif
     }
 }
 
