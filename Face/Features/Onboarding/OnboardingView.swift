@@ -18,6 +18,7 @@ struct OnboardingView: View {
     @State private var activeCapturePicker: CapturePickerRequest?
     @State private var isAnalyzing = false
     @State private var analysisErrorMessage: String?
+    @State private var isFaceAnalysisConsentPresented = false
     @State private var selectedBirthDate = Calendar.current.date(byAdding: .year, value: -29, to: Date()) ?? Date()
     @State private var didConfirmGender = false
     @State private var didConfirmAge = false
@@ -27,6 +28,7 @@ struct OnboardingView: View {
     @AppStorage(AppData.StorageKeys.gender) private var storedGender = ""
     @AppStorage(AppData.StorageKeys.age) private var storedAge = 0
     @AppStorage(AppData.StorageKeys.hasPendingInitialReport) private var hasPendingInitialReport = false
+    @AppStorage(AppData.StorageKeys.didAcceptFaceAnalysisConsent) private var didAcceptFaceAnalysisConsent = false
     private let mode: OnboardingFlowMode
 
     private struct CapturePickerRequest: Identifiable {
@@ -120,6 +122,11 @@ struct OnboardingView: View {
 
             if isStandaloneCaptureFlow {
                 captureOnlyHeader
+            }
+
+            if isFaceAnalysisConsentPresented {
+                faceAnalysisConsentOverlay
+                    .transition(.opacity)
             }
         }
         .simultaneousGesture(onboardingSwipeGesture)
@@ -334,12 +341,15 @@ struct OnboardingView: View {
                     .frame(width: cardWidth)
                     .contentShape(Rectangle())
                     .onTapGesture {
+                        guard !isAnalyzing else { return }
                         presentPhotoLibrary(for: position)
                     }
                 }
             }
         }
         .frame(height: 213)
+        .allowsHitTesting(!isAnalyzing)
+        .opacity(isAnalyzing ? 0.65 : 1)
     }
 
     private var tipCard: some View {
@@ -511,6 +521,7 @@ struct OnboardingView: View {
     private var onboardingSwipeGesture: some Gesture {
         DragGesture(minimumDistance: 20)
             .onEnded { value in
+                guard !isFaceAnalysisConsentPresented else { return }
                 let horizontal = value.translation.width
                 let vertical = value.translation.height
 
@@ -650,7 +661,7 @@ struct OnboardingView: View {
         if currentPage.kind == .faceCapture {
             guard !isAnalyzing else { return }
             if allCaptureStepsCompleted {
-                startSkinAnalysis()
+                startSkinAnalysisIfConsented()
             } else {
                 presentCamera(for: selectedCapturePosition)
             }
@@ -700,6 +711,7 @@ struct OnboardingView: View {
     }
 
     private func presentCamera(for position: CapturePosition) {
+        guard !isAnalyzing else { return }
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
             analysisErrorMessage = "Camera is unavailable on this device. In Simulator, please use Photo Library selection."
             return
@@ -728,6 +740,7 @@ struct OnboardingView: View {
     }
 
     private func presentPhotoLibrary(for position: CapturePosition) {
+        guard !isAnalyzing else { return }
         selectedCapturePosition = position
         activeCapturePicker = .init(sourceType: .photoLibrary, position: position)
     }
@@ -735,6 +748,80 @@ struct OnboardingView: View {
     private func syncCapturePositionWithProgress() {
         if let next = CapturePosition.allCases.first(where: { capturedImages[$0] == nil }) {
             selectedCapturePosition = next
+        }
+    }
+
+    private var faceAnalysisConsentOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.34)
+                .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(AppTheme.mainGradient)
+
+                    Text("Before First Analysis")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+
+                    Spacer()
+                }
+
+                Text("We use AI technology to analyze your facial images and provide skincare insights.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("Your images may be securely processed by our service providers for this purpose and are not stored after processing.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("By continuing, you consent to this processing.")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                VStack(spacing: 10) {
+                    Button {
+                        didAcceptFaceAnalysisConsent = true
+                        isFaceAnalysisConsentPresented = false
+                        startSkinAnalysis()
+                    } label: {
+                        PrimaryGradientButton(title: "Continue", icon: "sparkles", height: 56)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button("Not Now") {
+                        isFaceAnalysisConsentPresented = false
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                }
+                .padding(.top, 6)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 18)
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(Color.white.opacity(0.86))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(Color.white.opacity(0.98), lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal, 19)
+        }
+    }
+
+    private func startSkinAnalysisIfConsented() {
+        if didAcceptFaceAnalysisConsent {
+            startSkinAnalysis()
+        } else {
+            isFaceAnalysisConsentPresented = true
         }
     }
 
